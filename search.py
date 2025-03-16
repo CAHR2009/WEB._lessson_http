@@ -2,7 +2,7 @@ import sys
 from io import BytesIO  # Этот класс поможет нам сделать картинку из потока байт
 from size_found import found_size_function
 import requests
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 # Пусть наше приложение предполагает запуск:
 # python search.py Москва, ул. Ак. Королева, 12
@@ -18,10 +18,6 @@ try:
 
     response = requests.get(geocoder_api_server, params=geocoder_params)
 
-    if not response:
-        # обработка ошибочной ситуации
-        pass
-
     # Преобразуем ответ в json-объект
     json_response = response.json()
     # Получаем первый топоним из ответа геокодера.
@@ -31,23 +27,52 @@ try:
     # Долгота и широта:
     toponym_longitude, toponym_lattitude = toponym_coodrinates.split(" ")
 
-    delta = found_size_function(toponym)
+    search_api_server = "https://search-maps.yandex.ru/v1/"
+    api_key = "dda3ddba-c9ea-4ead-9010-f43fbc15c6e3"
+
+    search_params = {
+        "apikey": api_key,
+        "text": "аптека",
+        "lang": "ru_RU",
+        "ll": f'{toponym_longitude}, {toponym_lattitude}',
+        "type": "biz"
+    }
+
+    response = requests.get(search_api_server, params=search_params)
+    json_response = response.json()
+
+    # Получаем первую найденную организацию.
+    organization = json_response["features"][0]
+
+    # Получаем координаты ответа.
+    point = organization["geometry"]["coordinates"]
+    org_point = f"{point[0]},{point[1]}"
     apikey = "18cf6f36-a87a-4b02-829a-91c5ba3be0ec"
 
     # Собираем параметры для запроса к StaticMapsAPI:
     map_params = {
-        "ll": ",".join([toponym_longitude, toponym_lattitude]),
-        "spn": ",".join(delta),
+        # позиционируем карту центром на наш исходный адрес
+        "ll": f'{toponym_longitude},{toponym_lattitude}',
+        "bbox": f'{toponym_longitude},{toponym_lattitude}~{org_point}',
         "apikey": apikey,
-        "pt": f'{",".join([toponym_longitude, toponym_lattitude])},round'
+        "pt": f"{toponym_longitude},{toponym_lattitude},comma~{org_point},org"
     }
-
     map_api_server = "https://static-maps.yandex.ru/v1"
     # ... и выполняем запрос
-
+    rastoyanie = found_size_function(toponym_longitude, toponym_lattitude, org_point)
     response = requests.get(map_api_server, params=map_params)
+    snipet = [rastoyanie + 'м', organization["properties"]["CompanyMetaData"]["address"],
+              organization["properties"]["CompanyMetaData"]["name"],
+              organization["properties"]["CompanyMetaData"]["Hours"]["text"]]
     im = BytesIO(response.content)
     opened_image = Image.open(im)
-    opened_image.show()  # Создадим картинку и тут же ее покажем встроенным просмотрщиком операционной системы
+    font = ImageFont.truetype("arial.ttf", size=20)
+    idraw = ImageDraw.Draw(opened_image)
+    y = 10
+    for i in snipet:
+        y += 20
+        idraw.text((155, y), i, font=font, fill=(255, 0, 0))
+    opened_image.show()
+
 except Exception as error:
     print(error)

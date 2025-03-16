@@ -1,4 +1,6 @@
-def found_size_function(toponym):
-    left = list(map(lambda x: float(x), toponym["boundedBy"]["Envelope"]["lowerCorner"].split()))
-    right = list(map(lambda x: float(x), toponym["boundedBy"]["Envelope"]["upperCorner"].split()))
-    return [str(right[0] - left[0]), str(right[1] - left[1])]
+def found_size_function(long, latt, organization):
+    organization = organization.split(',')
+    delta = list(map(lambda x: x if x > 0 else -x, [float(long) - float(organization[0]),
+                                                    float(latt) - float(organization[1])]))
+    hypitinuse = (delta[0] ** 2 + delta[1] ** 2) ** 0.5
+    return str(hypitinuse * 111)[:10]
