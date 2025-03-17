@@ -1,5 +1,5 @@
 import sys
-from io import BytesIO  # Этот класс поможет нам сделать картинку из потока байт
+from io import BytesIO
 from size_found import found_size_function
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -42,36 +42,50 @@ try:
     json_response = response.json()
 
     # Получаем первую найденную организацию.
-    organization = json_response["features"][0]
-
-    # Получаем координаты ответа.
-    point = organization["geometry"]["coordinates"]
-    org_point = f"{point[0]},{point[1]}"
+    organizations = json_response["features"]
+    max_longitude = 0
+    max_lattitude = 0
+    min_longitude = 9999999
+    min_lattitude = 9999999
+    spic = []
+    color = ''
+    for i in organizations:
+        # Получаем координаты ответа.
+        point = i["geometry"]["coordinates"]
+        org_point = f"{point[0]},{point[1]}"
+        if float(point[0]) > max_longitude:
+            max_longitude = point[0]
+        elif float(point[0]) < min_longitude:
+            min_longitude = point[0]
+        if float(point[1]) > max_lattitude:
+            max_lattitude = point[1]
+        elif float(point[1]) < min_lattitude:
+            min_lattitude = point[1]
+        try:
+            if "TwentyFourHours" in i["properties"]["CompanyMetaData"]["Hours"]["Availabilities"][0]:
+                color = 'gn'
+            elif "Intervals" in i["properties"]["CompanyMetaData"]["Hours"]["Availabilities"][0]:
+                color = 'bl'
+        except Exception as error:
+            color = 'gr'
+        spic.append(f'{org_point},pm{color}s')
+    org_point = f"{max_longitude},{max_lattitude}"
     apikey = "18cf6f36-a87a-4b02-829a-91c5ba3be0ec"
-
+    pt_stroka = '~'.join(spic) + f'~{toponym_longitude},{toponym_lattitude},comma'
     # Собираем параметры для запроса к StaticMapsAPI:
     map_params = {
         # позиционируем карту центром на наш исходный адрес
         "ll": f'{toponym_longitude},{toponym_lattitude}',
-        "bbox": f'{toponym_longitude},{toponym_lattitude}~{org_point}',
+        "bbox": f'{min_longitude},{min_lattitude}~{org_point}',
         "apikey": apikey,
-        "pt": f"{toponym_longitude},{toponym_lattitude},comma~{org_point},org"
+        "pt": pt_stroka
     }
     map_api_server = "https://static-maps.yandex.ru/v1"
     # ... и выполняем запрос
-    rastoyanie = found_size_function(toponym_longitude, toponym_lattitude, org_point)
     response = requests.get(map_api_server, params=map_params)
-    snipet = [rastoyanie + 'м', organization["properties"]["CompanyMetaData"]["address"],
-              organization["properties"]["CompanyMetaData"]["name"],
-              organization["properties"]["CompanyMetaData"]["Hours"]["text"]]
     im = BytesIO(response.content)
     opened_image = Image.open(im)
     font = ImageFont.truetype("arial.ttf", size=20)
-    idraw = ImageDraw.Draw(opened_image)
-    y = 10
-    for i in snipet:
-        y += 20
-        idraw.text((155, y), i, font=font, fill=(255, 0, 0))
     opened_image.show()
 
 except Exception as error:
